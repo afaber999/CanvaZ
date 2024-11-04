@@ -7,26 +7,40 @@ const c = @cImport({
 
 const Self = @This();
 
-g_hwnd: c.HWND = null,
+hwnd: c.HWND = null,
+mouse_x : i16 = 0,
+mouse_y : i16 = 0,
+
 
 pub fn canvasWndProc(hwnd: c.HWND, msg: c.UINT, wParam: c.WPARAM, lParam: c.LPARAM) callconv(.C) c.LRESULT {
 
     const selfAddress = @as(usize, @intCast( c.GetWindowLongPtrA(hwnd, c.GWLP_USERDATA )));
-    
     const self = @as(?*Self, @ptrFromInt(selfAddress));
-//    const self = @as( *Self, @ptrFromInt( @intCast( c.GetWindowLongPtrA(hwnd, c.GWLP_USERDATA )));
-    std.debug.print("---- canvasWndProc {any} selfptr = {any}\n", .{msg,self});
-  
-    if (self) |s|{
-        std.debug.print("---- SSSSSS {any}\n", .{s.g_hwnd});
-    }
+
     return switch (msg) {
+        c.WM_PAINT => {
+            // var ps: c.PAINTSTRUCT = undefined;
+            // const hdc = c.BeginPaint(hwnd, &ps);
+            // c.FillRect(hdc, &ps.rcPaint, c.GetSysColorBrush(c.COLOR_WINDOW));
+            // c.EndPaint(hwnd, &ps);
+            return 0;
+        },
+        c.WM_MOUSEMOVE => {
+            if (self) |s| {
+                const lp : i32 = @intCast(lParam);
+                s.mouse_x = @truncate(lp);
+                s.mouse_y = @truncate(lp >> 16);
+            }
+            return 0;
+        },
+        c.WM_CLOSE => c.DestroyWindow(hwnd),
+        c.WM_DESTROY => {c.PostQuitMessage(0); return 0;},
         else => c.DefWindowProcA(hwnd, msg, wParam, lParam),    
     };
 }
 
 pub fn init() Self {
-    return Self{ .g_hwnd = null };
+    return Self{ .hwnd = null };
 }
 
 pub fn createWindow(self: *Self, name : [:0]const u8, width : i32, height :i32) !void {
@@ -84,7 +98,7 @@ pub fn createWindow(self: *Self, name : [:0]const u8, width : i32, height :i32) 
         //return c.GetLastError();
     }
 
-    self.g_hwnd = hwnd;
+    self.hwnd = hwnd;
 
     std.debug.print("\n SET SELF PTR SELF:  {any}", .{self});
     _ = c.SetWindowLongPtrA(hwnd, c.GWLP_USERDATA, @intCast(@intFromPtr( self )) );
@@ -103,7 +117,7 @@ pub fn update(self : Self) i32 {
     _ = c.DispatchMessageA(&msg);
   }
 
-  _ = c.InvalidateRect(self.g_hwnd, null, c.TRUE);
+  _ = c.InvalidateRect(self.hwnd, null, c.TRUE);
   return 0;
 }
 
