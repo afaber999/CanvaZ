@@ -36,6 +36,17 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    // ------------------
+    // INCLUDE
+    switch (target.result.os.tag) {
+        .macos => exe.linkFramework("Cocoa"),
+        .windows => exe.linkSystemLibrary("gdi32"),
+        .linux => exe.linkSystemLibrary("X11"),
+        else => {},
+    }
+    exe.linkLibC();
+    // ------------------
+
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default
     // step when running `zig build`).
