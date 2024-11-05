@@ -4,12 +4,38 @@ const c = @cImport({
     @cInclude("windows.h");
 });
 
-
 const Self = @This();
 
 hwnd: c.HWND = null,
+allocator: std.mem.Allocator,
+buffer:[]u32,
 mouse_x : i16 = 0,
 mouse_y : i16 = 0,
+width : usize = 0,
+height : usize = 0,
+prev_time : i64 = 0,
+
+pub inline fn from_rgba(r: u8, g: u8, b: u8, a: u8) u32 {
+    return (@as(u32, b) << 8 * 0) | (@as(u32, g) << 8 * 1) | (@as(u32, r) << 8 * 2) | (@as(u32, a) << 8 * 3);
+}
+
+pub fn init(allocator : std.mem.Allocator) Self {
+    return Self{ 
+        .hwnd = null,
+        .allocator = allocator,
+        .buffer = &.{},
+        .prev_time = std.time.milliTimestamp(),
+    };
+}
+
+pub fn dataBuffer(self: *Self) []u32 {
+    return self.buffer[0..];
+}
+
+pub const BINFO = extern struct {
+    bmiHeader: c.BITMAPINFOHEADER = std.mem.zeroes(c.BITMAPINFOHEADER),
+    bmiColors: [3]c.RGBQUAD = std.mem.zeroes([3]c.RGBQUAD),
+};
 
 
 pub fn canvasWndProc(hwnd: c.HWND, msg: c.UINT, wParam: c.WPARAM, lParam: c.LPARAM) callconv(.C) c.LRESULT {
@@ -19,10 +45,31 @@ pub fn canvasWndProc(hwnd: c.HWND, msg: c.UINT, wParam: c.WPARAM, lParam: c.LPAR
 
     return switch (msg) {
         c.WM_PAINT => {
-            // var ps: c.PAINTSTRUCT = undefined;
-            // const hdc = c.BeginPaint(hwnd, &ps);
-            // c.FillRect(hdc, &ps.rcPaint, c.GetSysColorBrush(c.COLOR_WINDOW));
-            // c.EndPaint(hwnd, &ps);
+            if (self) |s| {
+                var ps: c.PAINTSTRUCT = undefined;
+                const hdc = c.BeginPaint(hwnd, &ps);
+                const memdc = c.CreateCompatibleDC(hdc);
+                const hbmp = c.CreateCompatibleBitmap(hdc, @intCast(s.width), @intCast(s.height));
+                const oldbmp = c.SelectObject(memdc, hbmp);
+                var bi : BINFO = std.mem.zeroes(BINFO);
+                bi.bmiHeader.biSize = @sizeOf(BINFO);
+                bi.bmiHeader.biWidth = @as(c.LONG, @intCast(s.width));
+                bi.bmiHeader.biHeight = -@as(c.LONG, @intCast(s.height));
+                bi.bmiHeader.biPlanes = 1;
+                bi.bmiHeader.biBitCount = 32;
+                bi.bmiHeader.biCompression = c.BI_BITFIELDS;
+                bi.bmiColors[0].rgbRed = 0xff;
+                bi.bmiColors[1].rgbGreen = 0xff;
+                bi.bmiColors[2].rgbBlue = 0xff;
+
+                _ = c.SetDIBitsToDevice(memdc, 0, 0, @intCast(s.width), @intCast(s.height), 0, 0, 0, @intCast(s.height),
+                    s.buffer.ptr, @ptrCast(&bi), c.DIB_RGB_COLORS);
+                _ = c.BitBlt(hdc, 0, 0, @intCast(s.width), @intCast(s.height), memdc, 0, 0, c.SRCCOPY);
+                _ = c.SelectObject(memdc, oldbmp);
+                _ = c.DeleteObject(hbmp);
+                _ = c.DeleteDC(memdc);
+                _ = c.EndPaint(hwnd, &ps);            
+            }            
             return 0;
         },
         c.WM_MOUSEMOVE => {
@@ -39,11 +86,16 @@ pub fn canvasWndProc(hwnd: c.HWND, msg: c.UINT, wParam: c.WPARAM, lParam: c.LPAR
     };
 }
 
-pub fn init() Self {
-    return Self{ .hwnd = null };
-}
 
-pub fn createWindow(self: *Self, name : [:0]const u8, width : i32, height :i32) !void {
+
+pub fn createWindow(self: *Self, name : [:0]const u8, width :usize, height :usize) !void {
+
+    self.buffer = try self.allocator.alloc(u32, width*height);  
+    errdefer self.allocator.free(self.buffer);
+
+    self.width = width;
+    self.height = height;
+
     const instance = c.GetModuleHandleA(null);
     std.debug.print("Hinstance {any}", .{instance});
 
@@ -59,14 +111,13 @@ pub fn createWindow(self: *Self, name : [:0]const u8, width : i32, height :i32) 
     const dwStyle = c.WS_OVERLAPPEDWINDOW & ~c.WS_MAXIMIZEBOX & ~c.WS_MINIMIZEBOX | c.WS_VISIBLE;
 
 //   // Calculate the required size of the window rectangle based on desired client area size
-    const window_rect = c.RECT {
+    var window_rect = c.RECT {
         .left = 0,
         .top = 0,
-        .right = width,
-        .bottom = height,
+        .right = @intCast(width),
+        .bottom = @intCast(height),
     };
-    //_ = c.AdjustWindowRectEx(&window_rect, dwStyle, c.FALSE, 0);
-
+    _ = c.AdjustWindowRectEx(&window_rect, dwStyle, c.FALSE, 0);
 
     const hwnd = c.CreateWindowExA(
             c.WS_EX_CLIENTEDGE, name, name,
@@ -76,35 +127,19 @@ pub fn createWindow(self: *Self, name : [:0]const u8, width : i32, height :i32) 
                             null, null, instance, null);
 
     if (hwnd == null) {
-    const error_code = c.GetLastError();
-    var buffer: [256]u8 = undefined;
-    const message_length = c.FormatMessageA(
-        c.FORMAT_MESSAGE_FROM_SYSTEM | c.FORMAT_MESSAGE_IGNORE_INSERTS,
-        c.NULL,
-        error_code,
-        0,
-        &buffer[0],
-        @as(u32, @intCast( buffer.len)),
-        null,
-    );
-    if (message_length > 0) {
-        std.debug.print("\n\nCreateWindowExA failed with error: {s}\n", .{buffer[0..message_length]});
-    } else {
-        std.debug.print("\n\nCreateWindowExA failed with error code: {d}\n", .{error_code});
-    }
-
         return error.HandleInvalid;
-        //return error.WindowsError{.code = c.GetLastError()};
-        //return c.GetLastError();
     }
 
     self.hwnd = hwnd;
-
-    std.debug.print("\n SET SELF PTR SELF:  {any}", .{self});
     _ = c.SetWindowLongPtrA(hwnd, c.GWLP_USERDATA, @intCast(@intFromPtr( self )) );
     _ = c.ShowWindow(hwnd, c.SW_NORMAL);
     _ = c.UpdateWindow(hwnd);
 }
+
+pub fn destroyWindow(self: *Self) void {
+    self.allocator.free(self.buffer);
+}
+
 
 pub fn update(self : Self) i32 {
   
@@ -121,3 +156,13 @@ pub fn update(self : Self) i32 {
   return 0;
 }
 
+pub fn sleep(ms : u64) void { 
+    std.time.sleep(ms * 1000 * 1000);
+}
+
+pub fn delta(self : *Self) f32 {
+    const new_time = std.time.milliTimestamp();
+    const delta_secs = @as(f32, @floatFromInt( new_time - self.prev_time )) / std.time.ms_per_s;
+    self.prev_time = new_time;    
+    return delta_secs;
+}
