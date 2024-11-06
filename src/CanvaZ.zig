@@ -7,7 +7,7 @@ const c = @cImport({
             @cDefine( "_DEFAULT_SOURCE", "1" );
             @cInclude("X11/XKBlib.h");
             @cInclude("X11/Xlib.h");
-            @cInclude("X11/keysim.h");
+            //@cInclude("X11/keysim.h");
             @cInclude("time.h");
         },
         .windows => {
@@ -69,10 +69,10 @@ const PlatformSpecific = if (builtin.os.tag == .windows) struct {
     }
 
 } else if (builtin.os.tag == .linux) struct {
-    dpy : *c.Display,
-    w   : c.Window,
-    gc  : c.GC,
-    img : *c.XImage,
+    dpy : ?*c.Display = undefined,
+    w   : c.Window = undefined,
+    gc  : c.GC = undefined,
+    img : *c.XImage = undefined,
 } else struct {
 
 };
@@ -119,21 +119,23 @@ pub fn createWindow(self: *Self, name : [:0]const u8, width :usize, height :usiz
 
     switch (builtin.os.tag) {
         .linux => {
-            self.platform.dpy = c.XOpenDisplay(c.NULL);
+            const a = c.XOpenDisplay(null);
+            self.platform.dpy = a;
+            //self.platform.dpy = c.XOpenDisplay(null);
             const screen = c.DefaultScreen(self.platform.dpy);
             self.platform.w = c.XCreateSimpleWindow(
                 self.platform.dpy,
-                c.RootWindow(   self.platform.dpy, screen), 0, 0, self.width,self.height, 0,
+                c.RootWindow(   self.platform.dpy, screen), 0, 0, @intCast( self.width ) ,@intCast( self.height), 0,
                     c.BlackPixel(self.platform.dpy, screen),
                     c.WhitePixel(self.platform.dpy, screen));
 
             self.platform.gc = c.XCreateGC(self.platform.dpy, self.platform.w, 0, 0);
-            c.XSelectInput(self.platform.dpy, self.platform.w,
+            _ = c.XSelectInput(self.platform.dpy, self.platform.w,
                c.ExposureMask | c.KeyPressMask | c.KeyReleaseMask | c.ButtonPressMask |
                    c.ButtonReleaseMask | c.PointerMotionMask);
-                c.XStoreName(self.platform.dpy, self.platform.w, name);
-            c.XMapWindow(self.platform.dpy, self.platform.w);
-            c.XSync(self.platform.dpy, self.platform.w);
+            _ = c.XStoreName(self.platform.dpy, self.platform.w, name);
+            _ = c.XMapWindow(self.platform.dpy, self.platform.w);
+            _ = c.XSync(self.platform.dpy, @intCast( self.platform.w));
             self.platform.img = c.XCreateImage(self.platform.dpy, c.DefaultVisual(self.platform.dpy, 0), 24, c.ZPixmap, 0,
                         @ptrCast( self.buffer.ptr), @intCast(self.width), @intCast(self.height), 32, 0);
         },
@@ -188,36 +190,38 @@ pub fn update(self : Self) i32 {
 
     switch (builtin.os.tag) {
         .linux => {
-            var ev : c.XEvent = undefined;
-            c.XPutImage(self.platform.dpy, self.platform.w, self.platform.gc, self.platform.img, 0, 0, 0, 0, self.width, self.height);
-            c.XFlush(self.platform.dpy);
-            while (c.XPending(self.platform.dpy)) {
-                c.XNextEvent(self.platform.dpy, &ev);
-                switch (ev.type) {
-                    c.ButtonPress => {},
-                    c.ButtonRelease => {},
-                    else => {},
-                    // case ButtonRelease:
-                    // f->mouse = (ev.type == ButtonPress);
-                    // break;
-                    // case MotionNotify:
-                    // f->x = ev.xmotion.x, f->y = ev.xmotion.y;
-                    // break;
-                    // case KeyPress:
-                    // case KeyRelease: {
-                    // int m = ev.xkey.state;
-                    // int k = XkbKeycodeToKeysym(self.platform.dpy, ev.xkey.keycode, 0, 0);
-                    // for (unsigned int i = 0; i < 124; i += 2) {
-                    // if (FENSTER_KEYCODES[i] == k) {
-                    // f->keys[FENSTER_KEYCODES[i + 1]] = (ev.type == KeyPress);
-                    // break;
-                    // }
-                    // }
-                    // f->mod = (!!(m & ControlMask)) | (!!(m & ShiftMask) << 1) |
-                    //     (!!(m & Mod1Mask) << 2) | (!!(m & Mod4Mask) << 3);
-                    // } break;
-                }
+            //var ev : c.XEvent = undefined;
+            if (self.platform.dpy) |dpy| {
+                _ = c.XPutImage(dpy, self.platform.w, self.platform.gc, self.platform.img, 0, 0, 0, 0, @intCast(self.width), @intCast(self.height));
+                _ = c.XFlush(dpy);
             }
+            // while ( c.XPending(self.platform.dpy) != 0) {
+            //     c.XNextEvent(self.platform.dpy, &ev);
+            //     switch (ev.type) {
+            //         c.ButtonPress => {},
+            //         c.ButtonRelease => {},
+            //         else => {},
+            //         // case ButtonRelease:
+            //         // f->mouse = (ev.type == ButtonPress);
+            //         // break;
+            //         // case MotionNotify:
+            //         // f->x = ev.xmotion.x, f->y = ev.xmotion.y;
+            //         // break;
+            //         // case KeyPress:
+            //         // case KeyRelease: {
+            //         // int m = ev.xkey.state;
+            //         // int k = XkbKeycodeToKeysym(self.platform.dpy, ev.xkey.keycode, 0, 0);
+            //         // for (unsigned int i = 0; i < 124; i += 2) {
+            //         // if (FENSTER_KEYCODES[i] == k) {
+            //         // f->keys[FENSTER_KEYCODES[i + 1]] = (ev.type == KeyPress);
+            //         // break;
+            //         // }
+            //         // }
+            //         // f->mod = (!!(m & ControlMask)) | (!!(m & ShiftMask) << 1) |
+            //         //     (!!(m & Mod1Mask) << 2) | (!!(m & Mod4Mask) << 3);
+            //         // } break;
+            //     }
+            // }
 
         },
         .windows => {
@@ -234,7 +238,7 @@ pub fn update(self : Self) i32 {
         else => @compileError("Unsupported OS"),
     }
     return 0;
-}
+    }
 
 pub fn sleep(ms : u64) void { 
     std.time.sleep(ms * 1000 * 1000);
