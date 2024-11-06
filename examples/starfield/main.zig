@@ -7,7 +7,6 @@ const Star = struct {
     z: f32,
 };
 
-
 fn setPixel(buffer : []u32 ,width : usize, x : usize, y : usize, color: u32 ) void {
     const index = y * width + x;
     buffer[index] = color;
@@ -22,7 +21,7 @@ pub fn main() !void {
     const width = 800;
     const height = 600;
 
-    try canvas.createWindow("CanvaZ Gradient Demo", width,height);
+    try canvas.createWindow("CanvaZ StartField Demo", width,height);
 
     const stars= try allocator.alloc(Star, 8000);
 
