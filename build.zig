@@ -6,7 +6,15 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const canvaz_source_file = b.path("CanvaZ.zig");
-    const canvazModule = b.createModule(.{ .root_source_file = canvaz_source_file  });
+
+
+    const canvazModuleName = "CanvaZ";
+    const canvazModule = b.addModule(
+        canvazModuleName,
+        .{ .root_source_file = canvaz_source_file  });
+
+
+    //_= canvazModule;
 
     const ExampleDir = "examples/";
     const Examples = [_][]const u8{ "gradient", "starfield" };
@@ -21,7 +29,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         });
 
-        example.root_module.addImport("CanvaZ", canvazModule);
+        example.root_module.addImport(canvazModuleName, canvazModule);
 
         switch (target.result.os.tag) {
             .macos => example.linkFramework("Cocoa"),
