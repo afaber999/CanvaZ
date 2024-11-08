@@ -1,5 +1,5 @@
 const std = @import("std");
-const CanvaZ = @import("CanvaZ");
+const CanvaZ = @import("CanvaZ").CanvaZ;
 
 const Star = struct {
     x: f32,

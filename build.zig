@@ -5,7 +5,7 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const canvaz_source_file = b.path("src/CanvaZ.zig");
+    const canvaz_source_file = b.path("CanvaZ.zig");
     const canvazModule = b.createModule(.{ .root_source_file = canvaz_source_file  });
 
     const ExampleDir = "examples/";
