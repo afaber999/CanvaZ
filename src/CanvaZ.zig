@@ -119,9 +119,8 @@ pub fn createWindow(self: *Self, name : [:0]const u8, width :usize, height :usiz
 
     switch (builtin.os.tag) {
         .linux => {
-            const a = c.XOpenDisplay(null);
-            self.platform.dpy = a;
-            //self.platform.dpy = c.XOpenDisplay(null);
+            self.platform.dpy = c.XOpenDisplay(null);
+
             const screen = c.DefaultScreen(self.platform.dpy);
             self.platform.w = c.XCreateSimpleWindow(
                 self.platform.dpy,
