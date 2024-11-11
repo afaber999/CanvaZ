@@ -23,3 +23,21 @@ zig build run example_gradient
 
 zig build example_gradient
 zig build example_starfield
+
+
+## Include CanvaZ in your own zig project:
+
+Create directory for new project, e.g. CanvaZDemo
+Create default Zig project (zig init)
+Copy a demo file, e.g. gradient/main.zig to (overwrite) src/main.zig
+Add CanvaZ module depedency
+
+zig fetch --save https://github.com/afaber999/CanvaZ/archive/refs/heads/main.tar.gz
+
+then compile and run
+
+zig build run
+
+
+
+

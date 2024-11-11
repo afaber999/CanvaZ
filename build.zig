@@ -1,20 +1,61 @@
 const std = @import("std");
 
-pub fn build(b: *std.Build) void {
+const canvazModuleName = "CanvaZ";
 
-    const target = b.standardTargetOptions(.{});
-    const optimize = b.standardOptimizeOption(.{});
+
+pub fn addLinkDependencies(
+    compile_step: *std.Build.Step.Compile,
+    target: std.Build.ResolvedTarget) void {
+
+    switch (target.result.os.tag) {
+        .macos => compile_step.linkFramework("Cocoa"),
+        .windows => compile_step.linkSystemLibrary("gdi32"),
+        .linux => compile_step.linkSystemLibrary("X11"),
+        else => {},
+    }
+    compile_step.linkLibC();
+}
+
+// Function can be used by other modules to add CanvaZ as a dependency
+// to their build, see readme for details
+pub fn addCanazDependencies( 
+    compile_step: *std.Build.Step.Compile,
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+    comptime moduleName : []const  u8  ) void {
+
+    const canvaz_dep = b.dependency(moduleName, .{
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const canvaz = canvaz_dep.module(canvazModuleName);
+    compile_step.root_module.addImport(canvazModuleName, canvaz);
+
+    addLinkDependencies(compile_step, target);    
+}
+
+fn addCanvazModule(
+    compile_step: *std.Build.Step.Compile,
+    b: *std.Build,
+    target: std.Build.ResolvedTarget) void {
 
     const canvaz_source_file = b.path("CanvaZ.zig");
 
-
-    const canvazModuleName = "CanvaZ";
     const canvazModule = b.addModule(
         canvazModuleName,
         .{ .root_source_file = canvaz_source_file  });
 
+    compile_step.root_module.addImport(canvazModuleName, canvazModule);
 
-    //_= canvazModule;
+    addLinkDependencies(compile_step, target);
+}
+
+pub fn build(b: *std.Build) void {
+
+    const target = b.standardTargetOptions(.{});
+    const optimize = b.standardOptimizeOption(.{});
 
     const ExampleDir = "examples/";
     const Examples = [_][]const u8{ "gradient", "starfield" };
@@ -29,15 +70,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         });
 
-        example.root_module.addImport(canvazModuleName, canvazModule);
-
-        switch (target.result.os.tag) {
-            .macos => example.linkFramework("Cocoa"),
-            .windows => example.linkSystemLibrary("gdi32"),
-            .linux => example.linkSystemLibrary("X11"),
-            else => {},
-        }
-        example.linkLibC();
+        addCanvazModule(example, b, target);
 
         b.installArtifact(example);
 
