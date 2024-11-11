@@ -34,6 +34,24 @@ Add CanvaZ module depedency
 
 zig fetch --save https://github.com/afaber999/CanvaZ/archive/refs/heads/main.tar.gz
 
+
+and add following lines to build.zig (after the const exe .... block)
+    const canvaz = @import("CanvaZ");
+    canvaz.addCanazDependencies(exe, b, target, optimize, "CanvaZ");
+
+
+so it looks like:
+    const exe = b.addExecutable(.{
+        .name = "CanvazDemo",
+        .root_source_file = b.path("src/main.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const canvaz = @import("CanvaZ");
+    canvaz.addCanazDependencies(exe, b, target, optimize, "CanvaZ");
+    
+
 then compile and run
 
 zig build run

@@ -18,7 +18,7 @@ pub fn addLinkDependencies(
 
 // Function can be used by other modules to add CanvaZ as a dependency
 // to their build, see readme for details
-pub fn addCanazDependencies( 
+pub fn addCanvazDependencies( 
     compile_step: *std.Build.Step.Compile,
     b: *std.Build,
     target: std.Build.ResolvedTarget,
