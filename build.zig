@@ -41,7 +41,7 @@ fn addCanvazModule(
     b: *std.Build,
     target: std.Build.ResolvedTarget) void {
 
-    const canvaz_source_file = b.path("CanvaZ.zig");
+    const canvaz_source_file = b.path("src/CanvaZ.zig");
 
     const canvazModule = b.addModule(
         canvazModuleName,

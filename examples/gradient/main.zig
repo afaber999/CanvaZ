@@ -1,5 +1,5 @@
 const std = @import("std");
-const CanvaZ = @import("CanvaZ").CanvaZ;
+const CanvaZ = @import("CanvaZ");
 
 pub fn main() !void {
  
