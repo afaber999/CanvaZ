@@ -140,7 +140,6 @@ pub fn createWindow(self: *Self, name : [:0]const u8, width :usize, height :usiz
         },
         .windows => {
             const instance = c.GetModuleHandleA(null);
-            std.debug.print("Hinstance {any}", .{instance});
 
             var wc = std.mem.zeroes(c.WNDCLASSEX);
             wc.cbSize = @sizeOf(c.WNDCLASSEX);
