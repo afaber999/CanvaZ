@@ -17,7 +17,9 @@ pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
 
-    var canvas = CanvaZ.init(allocator);
+    var canvas = try CanvaZ.init(allocator);
+    defer canvas.deinit();
+
     const width = 800;
     const height = 600;
 
@@ -41,12 +43,11 @@ pub fn main() !void {
     while (canvas.update() == 0) {
         const delta = canvas.delta();
 
-        const buffer = canvas.dataBuffer();
         const fillColor = CanvaZ.from_rgba(0x10, 0x10, 0x10, 0xFF);
 
         for (0..height) |y| {
             for (0..width) |x| {
-                setPixel(buffer, width, x, y, fillColor );
+                canvas.setPixel(x, y, fillColor );
             }
         }
 
@@ -59,7 +60,7 @@ pub fn main() !void {
             const y = @as(i32, @intFromFloat( star.y / star.z * fh + fh));
 
             if ( x>=0 and x < @as(i32,@intCast( width)) and y>=0 and y < @as(i32,@intCast(height)) ) {
-                setPixel(buffer, width, @intCast(x), @intCast(y), CanvaZ.from_rgba(0xFF, 0xFF, 0x00, 0xFF));
+                canvas.setPixel(@intCast(x), @intCast(y), CanvaZ.from_rgba(0xFF, 0xFF, 0x00, 0xFF));
             }
         }
 

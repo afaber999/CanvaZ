@@ -6,7 +6,9 @@ pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
 
-    var canvas = CanvaZ.init(allocator);
+    var canvas = try CanvaZ.init(allocator);
+    defer canvas.deinit();
+
     const width = 800;
     const height = 600;
 
@@ -17,7 +19,7 @@ pub fn main() !void {
     const fh = @as(f32,@floatFromInt(height));
 
     while (canvas.update() == 0) {
-        const dataSice = canvas.dataBuffer();
+
         for (0..height) |y| {
             for (0..width) |x| {
 
@@ -30,8 +32,7 @@ pub fn main() !void {
                 const g = @as(u8, @intFromFloat( std.math.sin(d*std.math.tau + t + 3.0) * 127.0 + 128.0));
                 const b = @as(u8, @intFromFloat( std.math.sin(d*std.math.tau + t + 2.0) * 127.0 + 128.0));
 
-                const index = y * width + x;
-                dataSice[index] = CanvaZ.from_rgba(r, g, b, 0xFF);
+                canvas.setPixel(x, y, CanvaZ.from_rgba(r, g, b, 0xFF));
             }
         }
         CanvaZ.sleep(16);

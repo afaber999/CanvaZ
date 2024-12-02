@@ -22,44 +22,41 @@ const PlatformSpecific = if (builtin.os.tag == .windows) struct {
 
     fn canvasWndProc(hwnd: c.HWND, msg: c.UINT, wParam: c.WPARAM, lParam: c.LPARAM) callconv(.C) c.LRESULT {
 
-        const selfAddress = @as(usize, @intCast( c.GetWindowLongPtrA(hwnd, c.GWLP_USERDATA )));
-        const self = @as(?*Self, @ptrFromInt(selfAddress));
+        const contextAddress = @as(usize, @intCast( c.GetWindowLongPtrA(hwnd, c.GWLP_USERDATA )));
+        const context_opt = @as(?*Context, @ptrFromInt(contextAddress));
+        const context = context_opt orelse return c.DefWindowProcA(hwnd, msg, wParam, lParam);
 
         return switch (msg) {
             c.WM_PAINT => {
-                if (self) |s| {
-                    var ps: c.PAINTSTRUCT = undefined;
-                    const hdc = c.BeginPaint(hwnd, &ps);
-                    const memdc = c.CreateCompatibleDC(hdc);
-                    const hbmp = c.CreateCompatibleBitmap(hdc, @intCast(s.width), @intCast(s.height));
-                    const oldbmp = c.SelectObject(memdc, hbmp);
-                    var bi : BINFO = std.mem.zeroes(BINFO);
-                    bi.bmiHeader.biSize = @sizeOf(BINFO);
-                    bi.bmiHeader.biWidth = @as(c.LONG, @intCast(s.width));
-                    bi.bmiHeader.biHeight = -@as(c.LONG, @intCast(s.height));
-                    bi.bmiHeader.biPlanes = 1;
-                    bi.bmiHeader.biBitCount = 32;
-                    bi.bmiHeader.biCompression = c.BI_BITFIELDS;
-                    bi.bmiColors[0].rgbRed = 0xff;
-                    bi.bmiColors[1].rgbGreen = 0xff;
-                    bi.bmiColors[2].rgbBlue = 0xff;
+                var ps: c.PAINTSTRUCT = undefined;
+                const hdc = c.BeginPaint(hwnd, &ps);
+                const memdc = c.CreateCompatibleDC(hdc);
+                const hbmp = c.CreateCompatibleBitmap(hdc, @intCast(context.width), @intCast(context.height));
+                const oldbmp = c.SelectObject(memdc, hbmp);
+                var bi : BINFO = std.mem.zeroes(BINFO);
+                bi.bmiHeader.biSize = @sizeOf(BINFO);
+                bi.bmiHeader.biWidth = @as(c.LONG, @intCast(context.width));
+                bi.bmiHeader.biHeight = -@as(c.LONG, @intCast(context.height));
+                bi.bmiHeader.biPlanes = 1;
+                bi.bmiHeader.biBitCount = 32;
+                bi.bmiHeader.biCompression = c.BI_BITFIELDS;
+                bi.bmiColors[0].rgbRed = 0xff;
+                bi.bmiColors[1].rgbGreen = 0xff;
+                bi.bmiColors[2].rgbBlue = 0xff;
 
-                    _ = c.SetDIBitsToDevice(memdc, 0, 0, @intCast(s.width), @intCast(s.height), 0, 0, 0, @intCast(s.height),
-                        s.buffer.ptr, @ptrCast(&bi), c.DIB_RGB_COLORS);
-                    _ = c.BitBlt(hdc, 0, 0, @intCast(s.width), @intCast(s.height), memdc, 0, 0, c.SRCCOPY);
-                    _ = c.SelectObject(memdc, oldbmp);
-                    _ = c.DeleteObject(hbmp);
-                    _ = c.DeleteDC(memdc);
-                    _ = c.EndPaint(hwnd, &ps);            
-                }            
+                _ = c.SetDIBitsToDevice(memdc, 0, 0, @intCast(context.width), @intCast(context.height), 0, 0, 0, @intCast(context.height),
+                    context.buffer.ptr, @ptrCast(&bi), c.DIB_RGB_COLORS);
+                _ = c.BitBlt(hdc, 0, 0, @intCast(context.width), @intCast(context.height), memdc, 0, 0, c.SRCCOPY);
+                _ = c.SelectObject(memdc, oldbmp);
+                _ = c.DeleteObject(hbmp);
+                _ = c.DeleteDC(memdc);
+                _ = c.EndPaint(hwnd, &ps);            
                 return 0;
             },
             c.WM_MOUSEMOVE => {
-                if (self) |s| {
-                    const lp : i32 = @intCast(lParam);
-                    s.mouse_x = @truncate(lp);
-                    s.mouse_y = @truncate(lp >> 16);
-                }
+                const lp : i32 = @intCast(lParam);
+                context.mouse_x = @truncate(lp);
+                context.mouse_y = @truncate(lp >> 16);
                 return 0;
             },
             c.WM_CLOSE => c.DestroyWindow(hwnd),
@@ -80,30 +77,46 @@ const PlatformSpecific = if (builtin.os.tag == .windows) struct {
 
 const Self = @This();
 
+// need to be able to dynamic allocate context
+// so it remains valid when object is copied!
+const Context = struct {
+    buffer:[]u32 = .{},
+    mouse_x : i16 = 0,
+    mouse_y : i16 = 0,
+    width : usize = 0,
+    height : usize = 0,
+    prev_time : i64 = 0,
+    platform : PlatformSpecific = .{},
+};
+
 allocator: std.mem.Allocator,
-buffer:[]u32,
-mouse_x : i16 = 0,
-mouse_y : i16 = 0,
-width : usize = 0,
-height : usize = 0,
-prev_time : i64 = 0,
-platform : PlatformSpecific = .{},
+context : *Context = undefined,
 
 pub inline fn from_rgba(r: u8, g: u8, b: u8, a: u8) u32 {
     return (@as(u32, b) << 8 * 0) | (@as(u32, g) << 8 * 1) | (@as(u32, r) << 8 * 2) | (@as(u32, a) << 8 * 3);
 }
 
-pub fn init(allocator : std.mem.Allocator) Self {
+pub fn init(allocator : std.mem.Allocator) !Self {
+    const context = try allocator.create(Context);
     return Self{ 
         .allocator = allocator,
-        .buffer = &.{},
-        .prev_time = std.time.milliTimestamp(),
+        .context = context,
     };
 }
 
-pub fn dataBuffer(self: *Self) []u32 {
-    return self.buffer[0..];
+pub fn deinit(self : *Self) void {
+    self.allocator.destroy(self.context);
 }
+
+pub fn dataBuffer(self: *Self) []u32 {
+    return self.context.buffer[0..];
+}
+
+pub inline fn setPixel(self: *Self, x : usize, y : usize, color: u32 ) void {
+    const index = y * self.context.width + x;
+    self.context.buffer[index] = color;
+}
+
 
 pub const BINFO = extern struct {
     bmiHeader: c.BITMAPINFOHEADER = std.mem.zeroes(c.BITMAPINFOHEADER),
@@ -112,30 +125,31 @@ pub const BINFO = extern struct {
 
 pub fn createWindow(self: *Self, name : [:0]const u8, width :usize, height :usize) !void {
 
-    self.buffer = try self.allocator.alloc(u32, width*height);  
-    errdefer self.allocator.free(self.buffer);
-    self.width = width;
-    self.height = height;
+    self.context.buffer = try self.allocator.alloc(u32, width*height);  
+    errdefer self.allocator.free(self.context.buffer);
+    self.context.width = width;
+    self.context.height = height;
+    self.context.prev_time = std.time.milliTimestamp();
 
     switch (builtin.os.tag) {
         .linux => {
-            self.platform.dpy = c.XOpenDisplay(null);
+            self.context.platform.dpy = c.XOpenDisplay(null);
 
-            const screen = c.DefaultScreen(self.platform.dpy);
-            self.platform.w = c.XCreateSimpleWindow(
-                self.platform.dpy,
-                c.RootWindow(   self.platform.dpy, screen), 0, 0, @intCast( self.width ) ,@intCast( self.height), 0,
-                    c.BlackPixel(self.platform.dpy, screen),
-                    c.WhitePixel(self.platform.dpy, screen));
+            const screen = c.DefaultScreen(self.context.platform.dpy);
+            self.context.platform.w = c.XCreateSimpleWindow(
+                self.context.platform.dpy,
+                c.RootWindow(   self.context.platform.dpy, screen), 0, 0, @intCast( self.width ) ,@intCast( self.height), 0,
+                    c.BlackPixel(self.context.platform.dpy, screen),
+                    c.WhitePixel(self.context.platform.dpy, screen));
 
-            self.platform.gc = c.XCreateGC(self.platform.dpy, self.platform.w, 0, 0);
-            _ = c.XSelectInput(self.platform.dpy, self.platform.w,
+            self.context.platform.gc = c.XCreateGC(self.context.platform.dpy, self.context.platform.w, 0, 0);
+            _ = c.XSelectInput(self.context.platform.dpy, self.context.platform.w,
                c.ExposureMask | c.KeyPressMask | c.KeyReleaseMask | c.ButtonPressMask |
                    c.ButtonReleaseMask | c.PointerMotionMask);
-            _ = c.XStoreName(self.platform.dpy, self.platform.w, name);
-            _ = c.XMapWindow(self.platform.dpy, self.platform.w);
-            _ = c.XSync(self.platform.dpy, @intCast( self.platform.w));
-            self.platform.img = c.XCreateImage(self.platform.dpy, c.DefaultVisual(self.platform.dpy, 0), 24, c.ZPixmap, 0,
+            _ = c.XStoreName(self.context.platform.dpy, self.context.platform.w, name);
+            _ = c.XMapWindow(self.context.platform.dpy, self.context.platform.w);
+            _ = c.XSync(self.context.platform.dpy, @intCast( self.context.platform.w));
+            self.context.platform.img = c.XCreateImage(self.context.platform.dpy, c.DefaultVisual(self.context.platform.dpy, 0), 24, c.ZPixmap, 0,
                         @ptrCast( self.buffer.ptr), @intCast(self.width), @intCast(self.height), 32, 0);
         },
         .windows => {
@@ -171,8 +185,8 @@ pub fn createWindow(self: *Self, name : [:0]const u8, width :usize, height :usiz
                 return error.HandleInvalid;
             }
 
-            self.platform.hwnd = hwnd;
-            _ = c.SetWindowLongPtrA(hwnd, c.GWLP_USERDATA, @intCast(@intFromPtr( self )) );
+            self.context.platform.hwnd = hwnd;
+            _ = c.SetWindowLongPtrA(hwnd, c.GWLP_USERDATA, @intCast(@intFromPtr( self.context )) );
             _ = c.ShowWindow(hwnd, c.SW_NORMAL);
             _ = c.UpdateWindow(hwnd);
         },
@@ -181,7 +195,7 @@ pub fn createWindow(self: *Self, name : [:0]const u8, width :usize, height :usiz
 }
 
 pub fn destroyWindow(self: *Self) void {
-    self.allocator.free(self.buffer);
+    self.allocator.free(self.context.buffer);
 }
 
 pub fn update(self : Self) i32 {
@@ -189,12 +203,12 @@ pub fn update(self : Self) i32 {
     switch (builtin.os.tag) {
         .linux => {
             //var ev : c.XEvent = undefined;
-            if (self.platform.dpy) |dpy| {
-                _ = c.XPutImage(dpy, self.platform.w, self.platform.gc, self.platform.img, 0, 0, 0, 0, @intCast(self.width), @intCast(self.height));
+            if (self.context.platform.dpy) |dpy| {
+                _ = c.XPutImage(dpy, self.context.platform.w, self.context.platform.gc, self.context.platform.img, 0, 0, 0, 0, @intCast(self.width), @intCast(self.height));
                 _ = c.XFlush(dpy);
             }
-            // while ( c.XPending(self.platform.dpy) != 0) {
-            //     c.XNextEvent(self.platform.dpy, &ev);
+            // while ( c.XPending(self.context.platform.dpy) != 0) {
+            //     c.XNextEvent(self.context.platform.dpy, &ev);
             //     switch (ev.type) {
             //         c.ButtonPress => {},
             //         c.ButtonRelease => {},
@@ -208,7 +222,7 @@ pub fn update(self : Self) i32 {
             //         // case KeyPress:
             //         // case KeyRelease: {
             //         // int m = ev.xkey.state;
-            //         // int k = XkbKeycodeToKeysym(self.platform.dpy, ev.xkey.keycode, 0, 0);
+            //         // int k = XkbKeycodeToKeysym(self.context.platform.dpy, ev.xkey.keycode, 0, 0);
             //         // for (unsigned int i = 0; i < 124; i += 2) {
             //         // if (FENSTER_KEYCODES[i] == k) {
             //         // f->keys[FENSTER_KEYCODES[i + 1]] = (ev.type == KeyPress);
@@ -231,7 +245,7 @@ pub fn update(self : Self) i32 {
                 _ = c.DispatchMessageA(&msg);
             }
 
-            _ = c.InvalidateRect(self.platform.hwnd, null, c.TRUE);
+            _ = c.InvalidateRect(self.context.platform.hwnd, null, c.TRUE);
         },
         else => @compileError("Unsupported OS"),
     }
@@ -244,7 +258,7 @@ pub fn sleep(ms : u64) void {
 
 pub fn delta(self : *Self) f32 {
     const new_time = std.time.milliTimestamp();
-    const delta_secs = @as(f32, @floatFromInt( new_time - self.prev_time )) / std.time.ms_per_s;
-    self.prev_time = new_time;    
+    const delta_secs = @as(f32, @floatFromInt( new_time - self.context.prev_time )) / std.time.ms_per_s;
+    self.context.prev_time = new_time;    
     return delta_secs;
 }
