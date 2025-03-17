@@ -80,7 +80,7 @@ const Self = @This();
 // need to be able to dynamic allocate context
 // so it remains valid when object is copied!
 const Context = struct {
-    buffer:[]u32 = .{},
+    buffer:[]u32 = undefined,
     mouse_x : i16 = 0,
     mouse_y : i16 = 0,
     width : usize = 0,
@@ -110,6 +110,11 @@ pub fn deinit(self : *Self) void {
 
 pub fn dataBuffer(self: *Self) []u32 {
     return self.context.buffer[0..];
+}
+
+pub inline fn getPixel(self: *Self, x : usize, y : usize ) u32 {
+    const index = y * self.context.width + x;
+    return self.context.buffer[index];
 }
 
 pub inline fn setPixel(self: *Self, x : usize, y : usize, color: u32 ) void {
