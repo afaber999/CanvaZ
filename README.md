@@ -24,7 +24,7 @@ zig build run example_gradient
 
 zig build example_gradient
 zig build example_starfield
-
+zig build example_raytrace
 
 ## Include CanvaZ in your own zig project:
 

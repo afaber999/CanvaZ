@@ -58,7 +58,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const ExampleDir = "examples/";
-    const Examples = [_][]const u8{ "gradient", "starfield" };
+    const Examples = [_][]const u8{ "gradient", "starfield", "raytrace" };
 
     inline for (Examples) |exampleName| {
         const nm = ExampleDir ++ exampleName ++ "/main.zig";
