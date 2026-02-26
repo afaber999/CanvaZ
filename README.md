@@ -1,5 +1,6 @@
 # Indroduction
 Simple ZIG based drawing canvas for Windows/Linux and Mac, it is similar but less feature rich than minifb (in C or Rust)
+Build with Zig 0.15
 
 # CanvaZ
 **CanvaZ** is a lightweight, cross-platform graphics library written in **Zig**. It provides an easy-to-use window (canvas) for rendering 2D graphics on **Windows**, **macOS**, and **Linux**. Whether you're building a custom drawing tool, a game, or experimenting with graphics, CanvaZ offers a streamlined way to render and interact with a cross-platform canvas in Zig.

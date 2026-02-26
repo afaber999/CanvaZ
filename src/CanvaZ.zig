@@ -20,7 +20,7 @@ const c = @cImport({
 const PlatformSpecific = if (builtin.os.tag == .windows) struct {
     hwnd: c.HWND = null,
 
-    fn canvasWndProc(hwnd: c.HWND, msg: c.UINT, wParam: c.WPARAM, lParam: c.LPARAM) callconv(.C) c.LRESULT {
+    fn canvasWndProc(hwnd: c.HWND, msg: c.UINT, wParam: c.WPARAM, lParam: c.LPARAM) callconv(.c) c.LRESULT {
 
         const contextAddress = @as(usize, @intCast( c.GetWindowLongPtrA(hwnd, c.GWLP_USERDATA )));
         const context_opt = @as(?*Context, @ptrFromInt(contextAddress));
@@ -258,7 +258,7 @@ pub fn update(self : Self) i32 {
     }
 
 pub fn sleep(ms : u64) void { 
-    std.time.sleep(ms * 1000 * 1000);
+    std.Thread.sleep(ms * std.time.ns_per_ms);
 }
 
 pub fn delta(self : *Self) f32 {

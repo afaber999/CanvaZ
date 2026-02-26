@@ -63,11 +63,15 @@ pub fn build(b: *std.Build) void {
     inline for (Examples) |exampleName| {
         const nm = ExampleDir ++ exampleName ++ "/main.zig";
 
-        const example = b.addExecutable(.{
-            .name = exampleName,
+        const example_root_module = b.createModule(.{
             .root_source_file = b.path(nm),
             .target = target,
             .optimize = optimize,
+        });
+
+        const example = b.addExecutable(.{
+            .name = exampleName,
+            .root_module = example_root_module,
         });
 
         addCanvazModule(example, b, target);
@@ -86,10 +90,14 @@ pub fn build(b: *std.Build) void {
 
     }
 
-    const exe_unit_tests = b.addTest(.{
+    const tests_root_module = b.createModule(.{
         .root_source_file = b.path("src/tests.zig"),
         .target = target,
         .optimize = optimize,
+    });
+
+    const exe_unit_tests = b.addTest(.{
+        .root_module = tests_root_module,
     });
 
     const run_exe_unit_tests = b.addRunArtifact(exe_unit_tests);
