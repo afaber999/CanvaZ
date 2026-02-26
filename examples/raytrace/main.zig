@@ -1,4 +1,5 @@
-// Based on https://github.com/ssloy/tinyraytracer.
+// Simple raytracer in Zig, using CanvaZ for window management and pixel manipulation.
+// Based on https://github.com/tiehuis/zig-raytrace?tab=readme-ov-file
 
 const std = @import("std");
 const CanvaZ = @import("CanvaZ");
@@ -6,30 +7,9 @@ const CanvaZ = @import("CanvaZ");
 const width = 1024;
 const height = 768;
 const fov: f32 = std.math.pi / 3.0;
-const out_filename_ppm = "out.ppm";
-
-fn writePpmToFile(filename: []const u8, w: usize, h: usize, data: []const u32) !void {
-    std.debug.assert(data.len == w * h);
-
-    var file = try std.fs.cwd().createFile(filename, .{});
-    defer file.close();
-
-    var buffer: [4096]u8 = undefined;
-    var writer = file.writer(&buffer);
-
-    try writer.interface.print("P6\n{d} {d}\n255\n", .{ w, h });
-
-    var i: usize = 0;
-    while (i < data.len) : (i += 1) {
-        const px = data[i];
-        const rgb = [3]u8{
-            @as(u8, @truncate(px >> 16)),
-            @as(u8, @truncate(px >> 8)),
-            @as(u8, @truncate(px)),
-        };
-        try writer.interface.writeAll(&rgb);
-    }
-}
+const max_bounce_depth = 4;
+const lines_per_frame = 8;
+const frame_sleep_ms = 1;
 
 fn vec3(x: f32, y: f32, z: f32) Vec3f {
     return Vec3f{ .x = x, .y = y, .z = z };
@@ -73,13 +53,6 @@ fn Vec3(comptime T: type) type {
             return u.mulScalar(1 / u.norm());
         }
 
-        fn cross(u: Vec3f, v: Vec3f) Vec3f {
-            return vec3(
-                u.y * v.z - u.z * v.y,
-                u.z * v.x - u.x * v.z,
-                u.x * v.y - u.y * v.x,
-            );
-        }
     };
 }
 
@@ -183,7 +156,7 @@ fn castRay(origin: Vec3f, direction: Vec3f, spheres: []const Sphere, lights: []c
     var normal: Vec3f = undefined;
     var material = Material.default();
 
-    if (depth > 4 or !sceneIntersect(origin, direction, spheres, &point, &normal, &material)) {
+    if (depth > max_bounce_depth or !sceneIntersect(origin, direction, spheres, &point, &normal, &material)) {
         return vec3(0.2, 0.7, 0.8); // Background color
     }
 
@@ -224,7 +197,7 @@ fn castRay(origin: Vec3f, direction: Vec3f, spheres: []const Sphere, lights: []c
     return p1.add(p2.add(p3.add(p4)));
 }
 
-fn render_line(canvas: *CanvaZ,j: usize, spheres: []const Sphere, lights: []const Light) !void {
+fn renderLine(canvas: *CanvaZ, j: usize, spheres: []const Sphere, lights: []const Light) !void {
     var i: usize = 0;
     while (i < width) : (i += 1) {
         const x = (2 * (@as(f32, @floatFromInt(i)) + 0.5) / @as(f32, @floatFromInt(width)) - 1) * std.math.tan(fov / 2.0) * @as(f32, @floatFromInt(width)) / @as(f32, @floatFromInt(height));
@@ -318,19 +291,18 @@ pub fn main() !void {
     defer canvas.deinit();
 
     try canvas.createWindow("CanvaZ RayTrace Demo", width, height);
+    defer canvas.destroyWindow();
 
     var j: usize = 0;
 
     while (canvas.update() == 0) {
         if (j < height) {
-            for (0..8) |_| {
+            for (0..lines_per_frame) |_| {
                 if (j >= height) break;
-                try render_line(&canvas, j, spheres[0..], lights[0..]);
+                try renderLine(&canvas, j, spheres[0..], lights[0..]);
                 j += 1;
             }
         }
-        CanvaZ.sleep(1);
+        CanvaZ.sleep(frame_sleep_ms);
     }
-    try writePpmToFile(out_filename_ppm, width, height, canvas.dataBuffer());
-
 }
