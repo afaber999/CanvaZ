@@ -13,9 +13,7 @@ fn setPixel(buffer : []u32 ,width : usize, x : usize, y : usize, color: u32 ) vo
 }
 
 pub fn main() !void {
- 
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const allocator = gpa.allocator();
+    const allocator = std.heap.page_allocator;
 
     var canvas = try CanvaZ.init(allocator);
     defer canvas.deinit();
@@ -27,7 +25,8 @@ pub fn main() !void {
 
     const stars= try allocator.alloc(Star, 8000);
 
-    const rand = std.crypto.random;
+    var prng = std.Random.DefaultPrng.init(12345);
+    const rand = prng.random();
     const speed = 0.2;
     const spread = 0.8;
 

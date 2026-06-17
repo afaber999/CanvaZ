@@ -8,12 +8,12 @@ pub fn addLinkDependencies(
     target: std.Build.ResolvedTarget) void {
 
     switch (target.result.os.tag) {
-        .macos => compile_step.linkFramework("Cocoa"),
-        .windows => compile_step.linkSystemLibrary("gdi32"),
-        .linux => compile_step.linkSystemLibrary("X11"),
+        .macos => compile_step.root_module.linkFramework("Cocoa", .{}),
+        .windows => compile_step.root_module.linkSystemLibrary("gdi32", .{}),
+        .linux => compile_step.root_module.linkSystemLibrary("X11", .{}),
         else => {},
     }
-    compile_step.linkLibC();
+    compile_step.root_module.link_libc = true;
 }
 
 // Function can be used by other modules to add CanvaZ as a dependency

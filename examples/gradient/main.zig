@@ -2,9 +2,7 @@ const std = @import("std");
 const CanvaZ = @import("CanvaZ");
 
 pub fn main() !void {
- 
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const allocator = gpa.allocator();
+    const allocator = std.heap.page_allocator;
 
     var canvas = try CanvaZ.init(allocator);
     defer canvas.deinit();

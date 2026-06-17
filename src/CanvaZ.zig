@@ -8,6 +8,7 @@ const c = @cImport({
             @cInclude("X11/XKBlib.h");
             @cInclude("X11/Xlib.h");
             //@cInclude("X11/keysim.h");
+            @cInclude("sys/time.h");
             @cInclude("time.h");
         },
         .windows => {
@@ -96,6 +97,25 @@ pub inline fn from_rgba(r: u8, g: u8, b: u8, a: u8) u32 {
     return (@as(u32, b) << 8 * 0) | (@as(u32, g) << 8 * 1) | (@as(u32, r) << 8 * 2) | (@as(u32, a) << 8 * 3);
 }
 
+fn getCurrentTimeMs() i64 {
+    switch (builtin.os.tag) {
+        .windows => {
+            return @as(i64, @intCast(c.GetTickCount()));
+        },
+        .linux => {
+            var tv: c.timeval = undefined;
+            _ = c.gettimeofday(&tv, null);
+            return @as(i64, @intCast(tv.tv_sec)) * 1000 + @as(i64, @intCast(tv.tv_usec)) / 1000;
+        },
+        .macos => {
+            var tv: c.timeval = undefined;
+            _ = c.gettimeofday(&tv, null);
+            return @as(i64, @intCast(tv.tv_sec)) * 1000 + @as(i64, @intCast(tv.tv_usec)) / 1000;
+        },
+        else => @compileError("Unsupported OS"),
+    }
+}
+
 pub fn init(allocator : std.mem.Allocator) !Self {
     const context = try allocator.create(Context);
     return Self{ 
@@ -134,7 +154,7 @@ pub fn createWindow(self: *Self, name : [:0]const u8, width :usize, height :usiz
     errdefer self.allocator.free(self.context.buffer);
     self.context.width = width;
     self.context.height = height;
-    self.context.prev_time = std.time.milliTimestamp();
+    self.context.prev_time = getCurrentTimeMs();
 
     switch (builtin.os.tag) {
         .linux => {
@@ -258,12 +278,20 @@ pub fn update(self : Self) i32 {
     }
 
 pub fn sleep(ms : u64) void { 
-    std.Thread.sleep(ms * std.time.ns_per_ms);
+    switch (builtin.os.tag) {
+        .windows => {
+            c.Sleep(@as(c.DWORD, @intCast(ms)));
+        },
+        .linux, .macos => {
+            c.usleep(@as(c_uint, @intCast(ms * 1000)));
+        },
+        else => @compileError("Unsupported OS"),
+    }
 }
 
 pub fn delta(self : *Self) f32 {
-    const new_time = std.time.milliTimestamp();
-    const delta_secs = @as(f32, @floatFromInt( new_time - self.context.prev_time )) / std.time.ms_per_s;
+    const new_time = getCurrentTimeMs();
+    const delta_ms = @as(f32, @floatFromInt(new_time - self.context.prev_time));
     self.context.prev_time = new_time;    
-    return delta_secs;
+    return delta_ms / 1000.0;
 }
